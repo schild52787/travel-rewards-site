@@ -58,10 +58,25 @@ export async function GET(req: NextRequest) {
       fetchedAt: new Date().toISOString(),
     });
   } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : String(err);
+    // Amadeus SDK throws ResponseError objects (not standard Error)
+    let message = "Unknown error";
+    if (err instanceof Error) {
+      message = err.message;
+    } else if (err && typeof err === "object") {
+      const e = err as Record<string, unknown>;
+      // Amadeus ResponseError shape
+      if (e.response && typeof e.response === "object") {
+        const resp = e.response as Record<string, unknown>;
+        message = `Amadeus ${resp.statusCode ?? resp.status ?? "error"}: ${JSON.stringify(resp.data ?? resp.body ?? resp.result ?? "")}`;
+      } else if (e.description) {
+        message = String(e.description);
+      } else {
+        message = JSON.stringify(err);
+      }
+    }
     return NextResponse.json(
-      { price: null, source: "amadeus", error: `Fetch failed: ${message}` },
-      { status: 200 } // return 200 so client can show fallback gracefully
+      { price: null, source: "amadeus", error: message },
+      { status: 200 }
     );
   }
 }
