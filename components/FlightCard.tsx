@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { FlightRoute, RewardProgram, PriceResult } from "@/lib/types";
-import ValueMeter from "./ValueMeter";
+import AwardRow from "./AwardRow";
 
 interface Props {
   route: FlightRoute;
@@ -140,29 +140,13 @@ export default function FlightCard({ route, programs, onEdit, onDelete }: Props)
 
         {/* Programs value table */}
         {cashPrice && programs.length > 0 && (
-          <div className="space-y-4">
-            <p className="text-xs text-gray-500 uppercase tracking-wide font-medium">Reward Value Calculator</p>
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <p className="text-xs text-gray-500 uppercase tracking-wide font-medium">Reward Value Calculator</p>
+              <span className="text-xs text-gray-400">Live search · enter actual quote for accuracy</span>
+            </div>
             {programs.map((prog) => (
-              <div key={prog.id} className="border border-gray-100 rounded-xl p-3 space-y-2">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <span className={`text-xs text-white font-semibold ${prog.color} rounded px-2 py-0.5`}>
-                      {prog.name.split(" ")[0]}
-                    </span>
-                    <span className="text-sm text-gray-700 font-medium">{prog.name}</span>
-                  </div>
-                  <a
-                    href={prog.bookUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-xs text-teal-600 hover:underline"
-                  >
-                    Book ↗
-                  </a>
-                </div>
-                <p className="text-xs text-gray-500">{prog.miles.toLocaleString()} miles required</p>
-                <ValueMeter cashPrice={cashPrice} miles={prog.miles} threshold={prog.threshold} />
-              </div>
+              <AwardRow key={prog.id} program={prog} route={route} cashPrice={cashPrice} />
             ))}
           </div>
         )}

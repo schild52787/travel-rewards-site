@@ -57,6 +57,22 @@ export const DEFAULT_ROUTES = [
   },
 ];
 
+/** Generate a live award search deeplink for a program + route */
+export function awardSearchUrl(programId: string, origin: string, destination: string, date: string): string {
+  switch (programId) {
+    case "aadvantage":
+      return `https://www.aa.com/booking/search?locale=en_US&pax=1&adult=1&type=OneWay&searchType=Award&cabin=&carriers=ALL&slices=[{"orig":"${origin}","origNearby":false,"dest":"${destination}","destNearby":false,"date":"${date}"}]`;
+    case "virginatlantic":
+      return `https://flysearch.virgin-atlantic.com/search/results?adultsCount=1&cabinClass=Economy&isReturn=false&departureAirportCode=${origin}&arrivalAirportCode=${destination}&departureDate=${date}`;
+    case "skymileseco":
+      return `https://www.delta.com/us/en/flight-search/search?tripType=ONE_WAY&fareClass=business&origin=${origin}&destination=${destination}&departureDate=${date}&paxCount=1&isAwardTravel=true`;
+    case "flyingblue":
+      return `https://www.flyingblue.com/en/book-award`;
+    default:
+      return "https://www.google.com/travel/flights";
+  }
+}
+
 /** Cents-per-mile value calculation */
 export function calcCpp(cashPrice: number, miles: number): number {
   if (!cashPrice || !miles) return 0;
