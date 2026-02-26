@@ -43,7 +43,7 @@ export async function GET(req: NextRequest) {
 
     const offers = response.data as Array<{ price: { total: string } }>;
     if (!offers || offers.length === 0) {
-      return NextResponse.json({ price: null, source: "amadeus", error: "No flights found" });
+      return NextResponse.json({ price: null, source: "amadeus", error: "No flights found for this route/date" });
     }
 
     const prices = offers.map((o) => parseFloat(o.price.total)).filter((p) => !isNaN(p) && p > 0);
@@ -58,25 +58,40 @@ export async function GET(req: NextRequest) {
       fetchedAt: new Date().toISOString(),
     });
   } catch (err: unknown) {
-    // Amadeus SDK throws ResponseError objects (not standard Error)
-    let message = "Unknown error";
-    if (err instanceof Error) {
-      message = err.message;
-    } else if (err && typeof err === "object") {
+    // Pull a clean error message regardless of Amadeus SDK shape
+    let statusCode = 0;
+    let message = "Price temporarily unavailable";
+
+    if (err && typeof err === "object") {
       const e = err as Record<string, unknown>;
-      // Amadeus ResponseError shape
-      if (e.response && typeof e.response === "object") {
-        const resp = e.response as Record<string, unknown>;
-        message = `Amadeus ${resp.statusCode ?? resp.status ?? "error"}: ${JSON.stringify(resp.data ?? resp.body ?? resp.result ?? "")}`;
-      } else if (e.description) {
-        message = String(e.description);
-      } else {
-        message = JSON.stringify(err);
+      const resp = e.response as Record<string, unknown> | undefined;
+      statusCode = Number(resp?.statusCode ?? resp?.status ?? 0);
+
+      if (statusCode === 429) {
+        message = "Rate limit — try refreshing in a few minutes";
+      } else if (statusCode === 401) {
+        message = "API auth error — contact site owner";
+      } else if (statusCode === 400) {
+        message = "No flights found for this route/date";
+      } else if (statusCode >= 500) {
+        message = "Amadeus server error — try again shortly";
       }
+    } else if (err instanceof Error) {
+      message = err.message;
     }
-    return NextResponse.json(
-      { price: null, source: "amadeus", error: message },
-      { status: 200 }
-    );
+
+    // Return any stale cached value with a warning rather than a raw error
+    const stale = cache.get(cacheKey);
+    if (stale) {
+      return NextResponse.json({
+        price: stale.price,
+        currency: "USD",
+        source: "amadeus (cached — may be stale)",
+        fetchedAt: new Date(stale.fetchedAt).toISOString(),
+        warning: message,
+      });
+    }
+
+    return NextResponse.json({ price: null, source: "amadeus", error: message });
   }
 }

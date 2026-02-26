@@ -82,12 +82,15 @@ export default function FlightCard({ route, programs, onEdit, onDelete }: Props)
               </p>
             ) : (
               <p className="text-gray-400 text-sm mt-1">
-                {priceResult?.error ?? "Unavailable"}
+                {priceResult?.error ?? "Unavailable — check Google Flights"}
               </p>
             )}
             {fetchedAt && !loading && (
               <p className="text-xs text-gray-400 mt-1">
                 via Amadeus · {fetchedAt.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}
+                {(priceResult as {warning?: string})?.warning && (
+                  <span className="text-amber-500 ml-1">· {(priceResult as {warning?: string}).warning}</span>
+                )}
               </p>
             )}
           </div>
