@@ -140,8 +140,8 @@ export default function Home() {
         {/* Footer intel */}
         {settings.routes.length > 0 && (
           <div className="text-center text-xs text-gray-400 pb-8 space-y-1">
-            <p>Prices from Amadeus · Cached 2 hours · Tap 🔄 to refresh any route</p>
-            <p>Award rates are published standard rates — actual availability may vary</p>
+            <p>Cash prices from Amadeus · Cached 2 hours · tap Refresh to update</p>
+            <p>Award miles are web-search estimates — always verify on program site before booking</p>
           </div>
         )}
       </div>
