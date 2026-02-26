@@ -1,0 +1,7 @@
+{
+  "env": {
+    "AMADEUS_CLIENT_ID": "@amadeus_client_id",
+    "AMADEUS_CLIENT_SECRET": "@amadeus_client_secret",
+    "BRAVE_API_KEY": "@brave_api_key"
+  }
+}
