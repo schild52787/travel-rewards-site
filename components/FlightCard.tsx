@@ -43,13 +43,8 @@ export default function FlightCard({ route, programs, onEdit, onDelete }: Props)
   const googleFlightsUrl = `https://www.google.com/travel/flights/search?tfs=CBwQAhopEgoyMDI2LTA1LTI3agcIARIDT1BPcgcIARIDT1JEEgoyMDI2LTA1LTI3SABQAWIBL2MvcC8wN2Rm`;
   const gfUrl = `https://www.google.com/travel/flights?q=flights+from+${route.origin}+to+${route.destination}+on+${route.date}`;
 
-  // Best value program
-  const bestProgram = cashPrice
-    ? programs
-        .map((p) => ({ p, cpp: (cashPrice / p.miles) * 100 }))
-        .filter((x) => x.cpp >= x.p.threshold)
-        .sort((a, b) => b.cpp - a.cpp)[0]
-    : null;
+  // Note: no recommendation banner — award miles are dynamic/estimated per AwardRow,
+  // so we can't compute a reliable "best program" at this level without fetching all awards first.
 
   return (
     <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
@@ -115,28 +110,7 @@ export default function FlightCard({ route, programs, onEdit, onDelete }: Props)
           </div>
         </div>
 
-        {/* Recommendation banner */}
-        {cashPrice && bestProgram && (
-          <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-3">
-            <p className="text-sm font-semibold text-emerald-800">
-              🏆 Best value: {bestProgram.p.name}
-            </p>
-            <p className="text-xs text-emerald-700 mt-0.5">
-              {bestProgram.p.miles.toLocaleString()} miles = {bestProgram.cpp.toFixed(1)}¢/mile
-              {bestProgram.p.balance
-                ? ` · You can book ${Math.floor(bestProgram.p.balance / bestProgram.p.miles)} one-way(s)`
-                : ""}
-            </p>
-            <a
-              href={bestProgram.p.bookUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-block mt-2 text-xs font-medium text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg px-3 py-1.5 transition"
-            >
-              Book with miles ↗
-            </a>
-          </div>
-        )}
+        {/* Award rows show individual value verdicts — no aggregate banner since miles are dynamic */}
 
         {/* Programs value table */}
         {cashPrice && programs.length > 0 && (
