@@ -116,8 +116,8 @@ export default function FlightCard({ route, programs, onEdit, onDelete }: Props)
         {cashPrice && programs.length > 0 && (
           <div className="space-y-3">
             <div className="flex items-center justify-between">
-              <p className="text-xs text-gray-500 uppercase tracking-wide font-medium">Reward Value Calculator</p>
-              <span className="text-xs text-gray-400">Live search · enter actual quote for accuracy</span>
+              <p className="text-xs text-gray-500 uppercase tracking-wide font-medium">Reward Programs</p>
+              <span className="text-xs text-gray-400">Enter actual miles for value calc</span>
             </div>
             {programs.map((prog) => (
               <AwardRow key={prog.id} program={prog} route={route} cashPrice={cashPrice} />
