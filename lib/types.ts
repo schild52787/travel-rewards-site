@@ -38,3 +38,22 @@ export interface AppSettings {
   routes: FlightRoute[];
   programs: RewardProgram[];
 }
+
+export interface LiveAwardResult {
+  program: string;
+  programCode: string;
+  milesCost: number;
+  seatsAvailable: number;
+  carriers: string;
+  stops: number;
+  direct: boolean;
+  bookingUrl: string;
+}
+
+export interface AwardsApiResponse {
+  status: "ok" | "key_required" | "error";
+  results: LiveAwardResult[];
+  fetchedAt: string;
+  source: string;
+  message?: string;
+}

@@ -1,10 +1,17 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { RewardProgram, FlightRoute } from "@/lib/types";
-import { getQuote, setQuote, clearMilesOverride, AwardQuote } from "@/lib/storage";
-import { awardSearchUrl } from "@/lib/awards";
+import { RewardProgram, FlightRoute, LiveAwardResult, AwardsApiResponse } from "@/lib/types";
 import ValueMeter from "./ValueMeter";
+
+// Map program IDs to seats.aero Source codes
+const PROGRAM_CODES: Record<string, string[]> = {
+  flyingblue: ["FB", "AF"],
+  virginatlantic: ["VS"],
+  skymileseco: ["DL"],
+  aadvantage: ["AA"],
+  united: ["UA"],
+};
 
 interface Props {
   program: RewardProgram;
@@ -13,180 +20,143 @@ interface Props {
 }
 
 export default function AwardRow({ program, route, cashPrice }: Props) {
-  const [quote, setQuoteState] = useState<AwardQuote | null>(null);
-  const [milesInput, setMilesInput] = useState("");
-  const [feesInput, setFeesInput] = useState("");
-  const [inputOpen, setInputOpen] = useState(false);
+  const [apiResponse, setApiResponse] = useState<AwardsApiResponse | null>(null);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    setQuoteState(getQuote(route.id, program.id));
-  }, [route.id, program.id]);
+    setLoading(true);
+    fetch(`/api/awards?origin=${route.origin}&destination=${route.destination}&date=${route.date}`)
+      .then((r) => r.json())
+      .then((data: AwardsApiResponse) => setApiResponse(data))
+      .catch(() =>
+        setApiResponse({
+          status: "error",
+          results: [],
+          fetchedAt: new Date().toISOString(),
+          source: "seats.aero",
+          message: "Network error",
+        })
+      )
+      .finally(() => setLoading(false));
+  }, [route.origin, route.destination, route.date]);
 
-  const handleSave = () => {
-    const miles = parseInt(milesInput.replace(/[^0-9]/g, ""));
-    const fees = parseFloat(feesInput.replace(/[^0-9.]/g, "")) || 0;
-    if (!isNaN(miles) && miles > 1000) {
-      const q: AwardQuote = { miles, fees };
-      setQuote(route.id, program.id, q);
-      setQuoteState(q);
-      setInputOpen(false);
-      setMilesInput("");
-      setFeesInput("");
-    }
-  };
+  const codes = PROGRAM_CODES[program.id] ?? [];
+  const matches: LiveAwardResult[] = apiResponse?.results.filter((r) => codes.includes(r.programCode)) ?? [];
 
-  const handleClear = () => {
-    clearMilesOverride(route.id, program.id);
-    setQuoteState(null);
-    setInputOpen(false);
-  };
-
-  const liveUrl = awardSearchUrl(program.id, route.origin, route.destination, route.date);
-  const hasQuote = quote !== null;
-
-  // Two calculations:
-  // 1. Gross CPP (ignoring fees) = cashPrice / miles
-  // 2. Net CPP (after fees)      = (cashPrice - fees) / miles  ← the honest number
-  const grossCpp = hasQuote ? (cashPrice / quote!.miles) * 100 : null;
-  const netCpp   = hasQuote ? Math.max(0, (cashPrice - quote!.fees) / quote!.miles) * 100 : null;
-  const hasFees  = hasQuote && quote!.fees > 0;
-
-  // Use net CPP for all value decisions (the correct metric)
-  const activeCpp = netCpp;
-
-  const cppColor =
-    activeCpp === null ? "text-gray-400"
-    : activeCpp >= program.threshold * 1.5 ? "text-amber-600"
-    : activeCpp >= program.threshold ? "text-emerald-600"
-    : "text-red-500";
+  const formattedDate = new Date(route.date + "T12:00:00").toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+  });
 
   return (
-    <div className={`rounded-xl border overflow-hidden ${hasQuote ? "border-gray-200" : "border-dashed border-gray-200"}`}>
+    <div className="rounded-xl border border-gray-200 overflow-hidden">
       {/* Header */}
       <div className="flex items-center gap-2 px-3 py-2.5 bg-gray-50">
         <span className={`text-xs text-white font-semibold ${program.color} rounded px-2 py-0.5 shrink-0`}>
           {program.name.split(" ")[0]}
         </span>
         <span className="text-sm text-gray-700 font-medium flex-1 truncate">{program.name}</span>
-        {hasQuote && activeCpp !== null ? (
-          <span className={`text-xs font-bold shrink-0 ${cppColor}`}>
-            {activeCpp.toFixed(2)}¢/mi
-          </span>
-        ) : (
-          <span className="text-xs text-gray-400 italic shrink-0">price unknown</span>
-        )}
+        {!loading && matches.length > 0 && (() => {
+          const best = matches[0];
+          const cpp = cashPrice > 0 ? (cashPrice / best.milesCost) * 100 : null;
+          const cppColor =
+            cpp === null ? "text-gray-400"
+            : cpp >= program.threshold * 1.5 ? "text-amber-600"
+            : cpp >= program.threshold ? "text-emerald-600"
+            : "text-red-500";
+          return cpp !== null ? (
+            <span className={`text-xs font-bold shrink-0 ${cppColor}`}>
+              {cpp.toFixed(2)}¢/mi
+            </span>
+          ) : null;
+        })()}
       </div>
 
       <div className="px-3 py-2.5 space-y-2.5">
-        {hasQuote ? (
-          <>
-            {/* Quote summary */}
-            <div className="flex items-start justify-between">
-              <div className="space-y-0.5">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <span className="text-sm font-bold text-gray-900">
-                    {quote!.miles.toLocaleString()} miles
-                  </span>
-                  {hasFees && (
-                    <span className="text-sm text-gray-500">
-                      + ${quote!.fees.toLocaleString()} fees
-                    </span>
-                  )}
-                  <span className="text-xs bg-emerald-50 text-emerald-700 border border-emerald-200 rounded px-1.5 py-0.5">
-                    ✅ Your quote
-                  </span>
-                </div>
-
-                {/* Fee-adjusted breakdown */}
-                {hasFees && grossCpp !== null && netCpp !== null && (
-                  <div className="text-xs text-gray-500 space-y-0.5 pt-1">
-                    <div>
-                      Gross (ignore fees): <span className="font-medium">{grossCpp.toFixed(2)}¢/mi</span>
-                    </div>
-                    <div className="font-medium text-gray-700">
-                      Net after fees: <span className={cppColor}>{netCpp.toFixed(2)}¢/mi</span>
-                      <span className="text-gray-400 font-normal"> ← use this</span>
-                    </div>
-                  </div>
-                )}
-              </div>
-              <button onClick={() => setInputOpen(!inputOpen)} className="text-xs text-gray-400 hover:text-gray-600 underline shrink-0 mt-0.5">
-                Edit
-              </button>
-            </div>
-
-            {/* Value meter based on net CPP */}
-            {netCpp !== null && (
-              <ValueMeter cashPrice={cashPrice - quote!.fees} miles={quote!.miles} threshold={program.threshold} />
-            )}
-
-            {/* Verdict */}
-            {netCpp !== null && netCpp < program.threshold && (
-              <div className="bg-red-50 border border-red-200 rounded-lg px-3 py-2 text-xs text-red-700 font-medium">
-                ❌ Below your {program.threshold}¢ threshold after fees — book cash (${ cashPrice.toLocaleString()}) instead
-              </div>
-            )}
-          </>
+        {loading ? (
+          <div className="space-y-2 animate-pulse">
+            <div className="h-4 bg-gray-100 rounded w-3/4" />
+            <div className="h-3 bg-gray-100 rounded w-1/2" />
+          </div>
+        ) : apiResponse?.status === "key_required" ? (
+          <p className="text-xs text-gray-400 italic">
+            Live award data requires seats.aero Pro API key — add SEATS_AERO_API_KEY to environment
+          </p>
+        ) : apiResponse?.status === "error" ? (
+          <p className="text-xs text-red-400">
+            {apiResponse.message ?? "Error loading award data"}
+          </p>
+        ) : matches.length === 0 ? (
+          <p className="text-xs text-gray-400 italic">No award space found on {formattedDate}</p>
         ) : (
-          /* No price yet */
-          <>
-            <div className="bg-amber-50 border border-amber-200 rounded-lg px-3 py-2.5">
-              <p className="text-xs font-semibold text-amber-800 mb-0.5">Dynamic pricing — check the live price</p>
-              <p className="text-xs text-amber-700">
-                Enter miles + any fees/taxes for an accurate value calculation.
-              </p>
-            </div>
-            <a href={liveUrl} target="_blank" rel="noopener noreferrer"
-              className="flex items-center justify-center gap-1.5 w-full bg-teal-600 hover:bg-teal-700 text-white text-sm font-medium rounded-lg px-3 py-2 transition">
-              Search {program.name.split(" ")[0]} live ↗
-            </a>
-          </>
-        )}
+          <div className="space-y-4">
+            {matches.map((result, i) => {
+              const cpp = cashPrice > 0 ? (cashPrice / result.milesCost) * 100 : null;
+              const cppColor =
+                cpp === null ? "text-gray-400"
+                : cpp >= program.threshold * 1.5 ? "text-amber-600"
+                : cpp >= program.threshold ? "text-emerald-600"
+                : "text-red-500";
 
-        {/* Input form */}
-        {(!hasQuote || inputOpen) && (
-          <div className="space-y-2 pt-1">
-            <div className="grid grid-cols-2 gap-2">
-              <div>
-                <label className="text-xs text-gray-500 mb-1 block">Miles required</label>
-                <input type="text" inputMode="numeric" value={milesInput}
-                  onChange={(e) => setMilesInput(e.target.value)}
-                  onKeyDown={(e) => e.key === "Enter" && handleSave()}
-                  placeholder={hasQuote ? quote!.miles.toLocaleString() : "e.g. 55,500"}
-                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400"
-                  autoFocus={!hasQuote}
-                />
-              </div>
-              <div>
-                <label className="text-xs text-gray-500 mb-1 block">Fees/taxes (USD)</label>
-                <input type="text" inputMode="decimal" value={feesInput}
-                  onChange={(e) => setFeesInput(e.target.value)}
-                  onKeyDown={(e) => e.key === "Enter" && handleSave()}
-                  placeholder={hasQuote ? `$${quote!.fees}` : "e.g. 222"}
-                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400"
-                />
-              </div>
-            </div>
-            <div className="flex gap-2">
-              <button onClick={handleSave} disabled={!milesInput.trim()}
-                className="flex-1 bg-teal-600 hover:bg-teal-700 disabled:bg-gray-100 text-white disabled:text-gray-400 rounded-lg py-2 text-sm font-medium transition">
-                Save quote
-              </button>
-              {hasQuote && (
-                <button onClick={handleClear}
-                  className="text-xs text-red-400 hover:text-red-600 border border-red-100 rounded-lg px-3 py-2">
-                  Clear
-                </button>
-              )}
-              {inputOpen && (
-                <button onClick={() => setInputOpen(false)}
-                  className="text-xs text-gray-400 hover:text-gray-600 border border-gray-200 rounded-lg px-3 py-2">
-                  Cancel
-                </button>
-              )}
-            </div>
+              return (
+                <div key={i} className="space-y-2">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-sm font-bold text-gray-900">
+                          {result.milesCost.toLocaleString()} miles
+                        </span>
+                        <span className="text-xs text-gray-500">
+                          {result.seatsAvailable} seat{result.seatsAvailable !== 1 ? "s" : ""} left
+                        </span>
+                        <span
+                          className={`text-xs rounded px-1.5 py-0.5 ${
+                            result.direct
+                              ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
+                              : "bg-gray-50 text-gray-600 border border-gray-200"
+                          }`}
+                        >
+                          {result.direct ? "Direct" : `${result.stops} stop${result.stops !== 1 ? "s" : ""}`}
+                        </span>
+                        {result.carriers && (
+                          <span className="text-xs text-gray-500">via {result.carriers}</span>
+                        )}
+                      </div>
+                      {cpp !== null && (
+                        <div className={`text-xs font-semibold ${cppColor}`}>
+                          {cpp.toFixed(2)}¢/mi{cpp >= program.threshold ? " ✅" : " ❌"}
+                        </div>
+                      )}
+                    </div>
+                    <a
+                      href={result.bookingUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="shrink-0 bg-teal-600 hover:bg-teal-700 text-white text-xs font-medium rounded-lg px-3 py-2 transition"
+                    >
+                      Book ↗
+                    </a>
+                  </div>
+                  {cpp !== null && (
+                    <ValueMeter cashPrice={cashPrice} miles={result.milesCost} threshold={program.threshold} />
+                  )}
+                </div>
+              );
+            })}
           </div>
         )}
+
+        {/* Attribution */}
+        <div className="pt-1 border-t border-gray-100">
+          <a
+            href="https://seats.aero"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-xs text-gray-400 hover:text-gray-600"
+          >
+            Powered by seats.aero
+          </a>
+        </div>
       </div>
     </div>
   );
